@@ -25,6 +25,7 @@ if not os.path.exists(CHECKPOINT_DIR):
 spark = SparkSession \
     .builder \
     .appName("AgregacaoVendas12h") \
+    .config("spark.sql.codegen.wholeStage", "false") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
