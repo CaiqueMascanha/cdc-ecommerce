@@ -1,0 +1,111 @@
+version: '3.9'
+
+services:
+  # 1. Kafka (Moderno, sem Zookeeper - modo KRaft)
+  kafka:
+    # CORREÇÃO: Trocado de '3.7' para 'latest'
+    image: bitnamilegacy/kafka:latest
+    ports:
+      - '9094:9094' # Acesso externo (seu PySpark, Kafka-UI, etc.)
+    volumes:
+      - kafka_data:/bitnami/kafka
+    environment:
+      # Configuração do KRaft (substitui o Zookeeper)
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      # Habilita a criação automática de tópicos para o Debezium
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    networks:
+      - app-network
+
+  # 2. PostgreSQL (Fonte dos dados)
+  postgres:
+    image: postgres:16
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ecommerce_db
+    # Comando crucial para o Debezium: habilita o "logical decoding"
+    command: postgres -c wal_level=logical
+    networks:
+      - app-network
+
+  # 3. Kafka Connect (Rodando o Debezium)
+  kafka-connect:
+    image: debezium/connect:2.7.3.Final
+    ports:
+      - '8083:8083' # API REST para configurar o conector
+    environment:
+      - BOOTSTRAP_SERVERS=kafka:9092 # Conecta ao Kafka dentro da rede Docker
+      - GROUP_ID=1
+      - CONFIG_STORAGE_TOPIC=connect_configs
+      - OFFSET_STORAGE_TOPIC=connect_offsets
+      - STATUS_STORAGE_TOPIC=connect_status
+      # Conversores para JSON puro, mais fácil de ler no Spark/Kafka-UI
+      - CONNECT_KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE=false
+      - CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE=false
+    depends_on:
+      - kafka
+      - postgres
+    networks:
+      - app-network
+
+  # 4. Kafka UI (Para visualizar tópicos e mensagens)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - '9000:8080' # Mapeado para 9000 para evitar conflito com Spark-UI
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=meu-cluster-local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
+      - kafka-connect
+    networks:
+      - app-network
+
+  # 5. Spark Master (Onde você submete o job PySpark)
+  spark-master:
+    # CORREÇÃO: Trocado de '3.5' para 'latest'
+    image: bitnamilegacy/spark:latest
+    command: start-master.sh
+    ports:
+      - '8080:8080' # Spark Master Web UI
+      - '7077:7077' # Porta de submissão do Spark
+    volumes:
+      - ./spark-apps:/opt/bitnami/spark/apps
+    networks:
+      - app-network
+
+  # 6. Spark Worker (Quem executa o processamento)
+  spark-worker:
+    # CORREÇÃO: Trocado de '3.5' para 'latest'
+    image: bitnamilegacy/spark:latest
+    command: start-worker.sh spark://spark-master:7077
+    environment:
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    depends_on:
+      - spark-master
+    networks:
+      - app-network
+
+# Volumes para persistência de dados
+volumes:
+  postgres_data:
+  kafka_data:
+
+# Rede para os serviços se comunicarem
+networks:
+  app-network:
+    driver: bridge
