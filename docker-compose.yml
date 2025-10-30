@@ -39,6 +39,22 @@ services:
     networks:
       - app-network
 
+  mysql-analytics:
+    image: mysql:8.4
+    container_name: mysql-analytics-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: analytics_db
+      MYSQL_USER: user_spark
+      MYSQL_PASSWORD: admin
+    ports:
+      - '3307:3306'
+    volumes:
+      - mysql-analytics-data:/var/lib/mysql
+    networks:
+      - app-network
+
   # 3. Kafka Connect (Rodando o Debezium)
   kafka-connect:
     image: debezium/connect:2.7.3.Final
@@ -104,6 +120,7 @@ services:
 volumes:
   postgres_data:
   kafka_data:
+  mysql-analytics-data:
 
 # Rede para os serviços se comunicarem
 networks:
