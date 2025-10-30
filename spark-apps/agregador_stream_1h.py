@@ -6,10 +6,10 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 # --- Configurações ---
 KAFKA_BROKER = "kafka:9092"
 TOPICO_ENTRADA = "servidor_ecommerce.public.pedidos"
-TOPICO_SAIDA = "vendas-agregadas-10m" # Tópico de saída dedicado
+TOPICO_SAIDA = "vendas-agregadas-1h" # Tópico de saída dedicado
 
 # Checkpoint ÚNICO e claro para este job
-CHECKPOINT_DIR = "/tmp/spark-checkpoints-10min-1min" 
+CHECKPOINT_DIR = "/tmp/spark-checkpoints-1h-1min" 
 
 # Garante que o diretório de checkpoint exista (dentro do container)
 # Nota: O Spark geralmente cria isso, mas é uma boa prática.
@@ -68,7 +68,7 @@ df_com_watermark = df_pedidos_novos \
 # Agregação: Janela de 12h, deslizando a cada 1 minuto
 df_agregado = df_com_watermark \
     .groupBy(
-        window(col("timestamp_pedido"), "10 minutes", "1 minute"), 
+        window(col("timestamp_pedido"), "1 hour", "1 minute"), 
         col("cliente_id")
     ) \
     .agg(

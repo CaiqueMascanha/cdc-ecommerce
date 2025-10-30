@@ -66,7 +66,7 @@ def main():
     try:
         while True:
             # 50% de chance de criar um novo cliente
-            if not ids_clientes or random.random() < 0.1:
+            if not ids_clientes or random.random() < 0.0:
                 novo_id = criar_cliente(cursor)
                 ids_clientes.append(novo_id)
             
